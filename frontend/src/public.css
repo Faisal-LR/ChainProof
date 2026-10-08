@@ -1,0 +1,29 @@
+.public-workspace {
+  min-height: 100vh;
+  background: radial-gradient(ellipse at 100% 0, #1f345f 0, transparent 34%), #090d19;
+}
+
+.public-topbar {
+  height: 66px;
+  display: flex;
+  align-items: center;
+  gap: 2rem;
+  justify-content: space-between;
+  padding: 0 max(1.25rem, calc((100vw - 1270px) / 2));
+  border-bottom: 1px solid #202b45;
+  background: #0a0f1eeb;
+  backdrop-filter: blur(12px);
+}
+
+.public-topbar nav { margin-right: auto; display: flex; gap: 1.3rem; }
+.public-topbar nav a { color: #9eabc5; font-size: .73rem; font-weight: 800; }
+.public-topbar nav a:hover { color: #bafb83; }
+.public-topbar > div { display: flex; gap: .45rem; }
+.public-page { max-width: 1330px; margin: 0 auto; padding: 3.2rem 3rem 4rem; }
+
+@media (max-width: 800px) { .public-page { padding: 2rem 1.2rem; } }
+@media (max-width: 520px) {
+  .public-topbar { height: auto; gap: .7rem; padding: 1rem; flex-wrap: wrap; }
+  .public-topbar nav { order: 3; width: 100%; gap: .8rem; }
+  .public-page { padding: 1.6rem 1rem; }
+}
