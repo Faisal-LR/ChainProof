@@ -17,7 +17,7 @@ ChainProof is a full-stack intellectual-property evidence registry. It creates *
 
 ```text
 ChainProof/
-├── frontend/             React + Vite client (Vercel-ready)
+├── frontend/             React + Vite client 
 ├── backend/              Express API, Prisma schema, storage and services
 │   ├── prisma/           PostgreSQL schema, migration and optional seed
 │   └── src/
