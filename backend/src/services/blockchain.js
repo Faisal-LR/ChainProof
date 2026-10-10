@@ -27,8 +27,12 @@ export function createBlockchain() {
         if (!receipt || receipt.status !== 1) return { status: 'FAILED', txHash: transaction.hash, error: 'Blockchain transaction was not confirmed.' };
         return { status: 'CONFIRMED', txHash: transaction.hash, contractAddress: settings.contractAddress, network: String(settings.chainId || 'configured') };
       } catch (error) {
-        return { status: 'FAILED', error: error.shortMessage || 'Blockchain transaction failed.' };
-      }
+  console.error('ChainProof blockchain error:', error);
+  return {
+    status: 'FAILED',
+    error: error.shortMessage || error.reason || error.message || 'Blockchain transaction failed.'
+  };
+}
     },
     async getProof(ipId) {
       if (!configured) return { status: 'UNAVAILABLE', error: 'Blockchain unavailable: RPC_URL, PRIVATE_KEY, or CONTRACT_ADDRESS is not configured.' };

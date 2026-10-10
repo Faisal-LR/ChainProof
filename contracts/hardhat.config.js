@@ -1,13 +1,17 @@
 require('@nomicfoundation/hardhat-toolbox');
 require('dotenv').config();
 
-const networks = {};
-if (process.env.RPC_URL && process.env.PRIVATE_KEY) {
-  networks.configured = {
-    url: process.env.RPC_URL,
-    accounts: [process.env.PRIVATE_KEY],
-    chainId: Number(process.env.CHAIN_ID || 11155111)
-  };
-}
-
-module.exports = { solidity: '0.8.24', networks };
+module.exports = {
+  solidity: '0.8.24',
+  networks: {
+    localhost: {
+      url: 'http://127.0.0.1:8545',
+      chainId: 31337
+    },
+    sepolia: {
+      url: process.env.RPC_URL,
+      accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [],
+      chainId: 11155111
+    }
+  }
+};
