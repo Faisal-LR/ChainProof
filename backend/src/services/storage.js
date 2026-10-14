@@ -19,7 +19,7 @@ export function createStorage() {
       region: config.storage.region,
       endpoint: config.storage.endpoint || undefined,
       credentials: { accessKeyId: config.storage.accessKeyId, secretAccessKey: config.storage.secretAccessKey },
-      forcePathStyle: provider === 'r2'
+      forcePathStyle: true
     });
     return {
       provider,
