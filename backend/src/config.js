@@ -28,7 +28,9 @@ export const config = {
   },
   blockchain: {
     rpcUrl: process.env.RPC_URL, chainId: process.env.CHAIN_ID ? Number(process.env.CHAIN_ID) : undefined,
-    privateKey: process.env.PRIVATE_KEY, contractAddress: process.env.CONTRACT_ADDRESS
+    privateKey: process.env.PRIVATE_KEY,
+    contractAddress: process.env.CONTRACT_ADDRESS,
+    blockExplorerUrl: process.env.BLOCK_EXPLORER_URL || ''
   }
 };
 

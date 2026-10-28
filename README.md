@@ -8,6 +8,7 @@ ChainProof is a full-stack intellectual-property evidence registry. It creates *
 - Express REST API with JWT authentication, bcrypt password hashing, Zod validation, rate limits, Helmet/CORS, upload limits and protected admin routes.
 - PostgreSQL + Prisma schema/migration for users, registrations, versions, fingerprints, verification records, blockchain transactions, audit logs and an IP ID counter.
 - SHA-256 exact-file verification for every IP category.
+- A QR code for every registration, linking to a public, registration-specific verifier that hashes the selected file in the browser and sends only its SHA-256 digest.
 - Logo-only perceptual image hashing and ranked visual similarity. It is deliberately not used for other categories and is labeled as a possible visual match, not ownership proof.
 - Local-development file storage plus an S3/R2 storage abstraction for production persistence.
 - Solidity registry, deployment script and Hardhat test. The contract stores metadata and a content hash, never the copyrighted file itself.
@@ -69,9 +70,10 @@ See [`backend/.env.example`](backend/.env.example) and [`frontend/.env.example`]
 | `JWT_SECRET` | Secret used to sign login tokens; required in production |
 | `CORS_ORIGIN` | Deployed frontend URL, e.g. `https://your-app.vercel.app` |
 | `VITE_API_URL` | Public API URL ending with `/api` |
+| `VITE_PUBLIC_APP_URL` | Canonical frontend URL embedded in verification QR codes; local development falls back to the browser origin, production falls back to `https://chain-proof-six.vercel.app` |
 | `STORAGE_PROVIDER` | `s3` or `r2` in production; `local` is development-only |
 | `STORAGE_*` | Bucket, endpoint and server-side object storage credentials |
-| `RPC_URL`, `CHAIN_ID`, `PRIVATE_KEY`, `CONTRACT_ADDRESS` | Ethereum-compatible contract integration |
+| `RPC_URL`, `CHAIN_ID`, `PRIVATE_KEY`, `CONTRACT_ADDRESS`, `BLOCK_EXPLORER_URL` | Ethereum-compatible contract integration and optional transaction-explorer base URL |
 | `VISUAL_SIMILARITY_THRESHOLD` | Logo match percentage, default `65` |
 
 Do not commit `.env` files, a wallet private key, object-storage secret, or production database URL.
@@ -97,7 +99,7 @@ Copy the deployed address to backend `CONTRACT_ADDRESS`, along with the RPC URL,
 
 ### Frontend on Vercel
 
-Import the repository as a Vercel project. Set root directory to `frontend`, build command to `npm run build`, output directory to `dist`, and set `VITE_API_URL=https://YOUR-API.example/api`. `frontend/vercel.json` handles browser-router deep links.
+Import the repository as a Vercel project. Set root directory to `frontend`, build command to `npm run build`, output directory to `dist`, and set `VITE_API_URL=https://YOUR-API.example/api`. Set the Production environment variable `VITE_PUBLIC_APP_URL=https://chain-proof-six.vercel.app`; Vite embeds it during build. If unset, production QR codes safely fall back to that canonical domain, while local development uses the current browser origin. `frontend/vercel.json` handles browser-router deep links.
 
 ### Backend on Render or Railway
 
@@ -108,11 +110,13 @@ Deploy from the `backend` directory with build command `npm install && npm run b
 1. Run the local application and create an account (or use the Demo administrator).
 2. Register a **Logo** image. The form shows its SHA-256 before submission and returns a persisted IP ID such as `CP-2026-000005`.
 3. On the confirmation card, show creator, timestamp, license, version and the real blockchain status. With no credentials it accurately says unavailable.
-4. Open **Verify Work**, upload the unmodified original, and show `EXACT MATCH FOUND`.
-5. Change the file even slightly, re-upload, and show `NO EXACT MATCH FOUND`.
-6. Open **Logo Search**, use the original logo or a comparable screenshot/photo, and show ranked possible visual matches. Explain it is a visual similarity result only.
-7. Register the revised file using the first record’s IP ID in **Previous IP ID** and open its version timeline.
-8. Find both records in **Public Registry**, open the evidence detail, then sign out and sign back in.
+4. Open the record’s **View QR Code** action and scan or open its `/verify/CP-...` link. This public page exposes registration metadata only; it never exposes the original storage object.
+5. On that page, select the unmodified original and show `MATCH`; the browser calculates its SHA-256 locally and the API compares only that digest to the specific registration.
+6. Change the file even slightly, select it again, and show `NO MATCH`.
+7. Open **Verify Work** to demonstrate registry-wide exact-hash lookup separately from the QR-specific verifier.
+8. Open **Logo Search**, use the original logo or a comparable screenshot/photo, and show ranked possible visual matches. Explain it is a visual similarity result only.
+9. Register the revised file using the first record’s IP ID in **Previous IP ID** and open its version timeline.
+10. Find both records in **Public Registry**, open the evidence detail, then sign out and sign back in.
 
 ## Testing and current limits
 

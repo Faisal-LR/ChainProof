@@ -43,6 +43,65 @@ const tagsFrom = (value) =>
         .filter(Boolean)
         .slice(0, 12);
 
+const registrationId = z.string().regex(/^CP-\d{4}-\d{6}$/, 'Invalid registration ID.');
+const sha256Value = z.string().trim().regex(/^[a-fA-F0-9]{64}$/, 'Invalid SHA-256 hash.');
+
+const explorerByNetwork = {
+  '1': 'https://etherscan.io',
+  '11155111': 'https://sepolia.etherscan.io',
+  '137': 'https://polygonscan.com',
+  '80002': 'https://amoy.polygonscan.com',
+  '8453': 'https://basescan.org',
+  '84532': 'https://sepolia.basescan.org'
+};
+
+const networkNames = {
+  '1': 'Ethereum Mainnet',
+  '11155111': 'Ethereum Sepolia',
+  '137': 'Polygon',
+  '80002': 'Polygon Amoy',
+  '8453': 'Base',
+  '84532': 'Base Sepolia',
+  '31337': 'Hardhat local network'
+};
+
+function publicRegistrationRecord(record) {
+  if (!record) return null;
+  const transaction = record.transactions?.[0] || null;
+  const transactionHash = record.blockchainTxHash || transaction?.txHash || null;
+  const network = transaction?.network || (record.blockchainStatus === 'CONFIRMED' && config.blockchain.chainId ? String(config.blockchain.chainId) : null);
+  const explorerBase = config.blockchain.blockExplorerUrl || (network ? explorerByNetwork[network] : null);
+
+  return {
+    ipId: record.ipId,
+    title: record.title,
+    creatorName: record.creatorName,
+    category: record.category,
+    sha256: record.sha256,
+    license: record.license,
+    version: record.version,
+    previousIpId: record.previousIpId,
+    createdAt: record.createdAt,
+    mimeType: record.mimeType,
+    fileSize: record.fileSize,
+    blockchainStatus: record.blockchainStatus,
+    blockchainTxHash: transactionHash,
+    contractAddress: record.contractAddress || transaction?.contractAddress || null,
+    blockchainNetwork: network ? { id: network, name: networkNames[network] || `Network ${network}` } : null,
+    transactionUrl: transactionHash && explorerBase
+      ? `${explorerBase.replace(/\/$/, '')}/tx/${transactionHash}`
+      : null
+  };
+}
+
+function assertRecordAccess(record, user) {
+  if (record.creatorId !== user.id && user.role !== 'ADMIN') {
+    const error = new Error('You are not allowed to view this private registration.');
+    error.status = 403;
+    throw error;
+  }
+}
+
 const optionalAuth = (repository) => async (req, res, next) => {
   const token = req.headers.authorization?.startsWith('Bearer ')
     ? req.headers.authorization.slice(7)
@@ -192,8 +251,9 @@ export function createApp({
     });
   }));
 
-  // Registration details
-  app.get('/api/ip/:ipId', asyncRoute(async (req, res) => {
+  // Private registration details, including a temporary signed preview URL where applicable.
+  app.get('/api/ip/:ipId', auth, asyncRoute(async (req, res) => {
+    registrationId.parse(req.params.ipId);
     const record = await repository.findRegistration(req.params.ipId);
 
     if (!record) {
@@ -202,13 +262,24 @@ export function createApp({
       });
     }
 
+    assertRecordAccess(record, req.user);
+
+    const privateRecord = await withImageUrl(record);
     return res.json({
-      registration: await withImageUrl(record)
+      registration: { ...privateRecord, ...publicRegistrationRecord(record) }
     });
   }));
 
-  // Registration version history
-  app.get('/api/ip/:ipId/versions', asyncRoute(async (req, res) => {
+  // Private version history. A public, storage-safe equivalent is available below.
+  app.get('/api/ip/:ipId/versions', auth, asyncRoute(async (req, res) => {
+    registrationId.parse(req.params.ipId);
+    const current = await repository.findRegistration(req.params.ipId);
+
+    if (!current) {
+      return res.status(404).json({ error: 'Registration not found.' });
+    }
+
+    assertRecordAccess(current, req.user);
     const versions = await repository.versions(req.params.ipId);
 
     if (!versions.length) {
@@ -347,7 +418,7 @@ export function createApp({
       return res.json({
         exactMatch: Boolean(record),
         sha256: hash,
-        registration: await withImageUrl(record),
+        registration: publicRegistrationRecord(record),
         explanation: record
           ? 'The uploaded file exactly matches a registered cryptographic hash.'
           : 'The uploaded file does not exactly match a registered file. This does not determine whether the work legally exists.'
@@ -386,12 +457,10 @@ export function createApp({
         .filter((result) => result.similarity >= config.visualThreshold)
         .sort((a, b) => b.similarity - a.similarity);
 
-      const results = await Promise.all(
-        matching.map(async ({ record, similarity: score }) => ({
-          registration: await withImageUrl(record),
-          similarity: score
-        }))
-      );
+      const results = matching.map(({ record, similarity: score }) => ({
+        registration: publicRegistrationRecord(record),
+        similarity: score
+      }));
 
       await repository.createVerification({
         type: 'LOGO_VISUAL',
@@ -422,12 +491,13 @@ export function createApp({
     const registrations = await repository.listRegistrations(filters);
 
     return res.json({
-      registrations: await withImageUrls(registrations)
+      registrations: registrations.map(publicRegistrationRecord)
     });
   }));
 
-  // Public registry detail
+  // Legacy public registry detail. Kept for existing links, but only exposes the public metadata whitelist.
   app.get('/api/registry/:ipId', asyncRoute(async (req, res) => {
+    registrationId.parse(req.params.ipId);
     const record = await repository.findRegistration(req.params.ipId);
 
     if (!record) {
@@ -437,7 +507,52 @@ export function createApp({
     }
 
     return res.json({
-      registration: await withImageUrl(record)
+      registration: publicRegistrationRecord(record)
+    });
+  }));
+
+  // QR-code destination: public, registration-specific, and intentionally free of private storage URLs.
+  app.get('/api/public/registrations/:ipId/versions', asyncRoute(async (req, res) => {
+    registrationId.parse(req.params.ipId);
+    const versions = await repository.versions(req.params.ipId);
+
+    if (!versions.length) {
+      return res.status(404).json({ error: 'Registration not found.' });
+    }
+
+    return res.json({ versions: versions.map(publicRegistrationRecord) });
+  }));
+
+  app.get('/api/public/registrations/:ipId', asyncRoute(async (req, res) => {
+    registrationId.parse(req.params.ipId);
+    const record = await repository.findRegistration(req.params.ipId);
+
+    if (!record) {
+      return res.status(404).json({ error: 'Registration not found.' });
+    }
+
+    return res.json({ registration: publicRegistrationRecord(record) });
+  }));
+
+  // The browser hashes the actual selected bytes; the API compares only that digest to this specific public record.
+  // No verification file is persisted or forwarded to object storage.
+  app.post('/api/public/registrations/:ipId/verify', asyncRoute(async (req, res) => {
+    registrationId.parse(req.params.ipId);
+    const { sha256: uploadedHash } = z.object({ sha256: sha256Value }).parse(req.body);
+    const record = await repository.findRegistration(req.params.ipId);
+
+    if (!record) {
+      return res.status(404).json({ error: 'Registration not found.' });
+    }
+
+    const exactMatch = uploadedHash.toLowerCase() === record.sha256.toLowerCase();
+
+    return res.json({
+      exactMatch,
+      ipId: record.ipId,
+      explanation: exactMatch
+        ? 'The selected file exactly matches this registered cryptographic hash.'
+        : 'The selected file does not exactly match this registered file. This does not determine whether the work legally exists.'
     });
   }));
 
